@@ -34,11 +34,11 @@ const BookingReviewModal = ({
   const [mounted, setMounted] = useState(false);
 
   // Constants
-  const SERVICE_FEE = 50; // Fixed fee for example
+ 
 
   // Calculate Total: (Price Per Night * Nights) + Service Fee
   const STAY_TOTAL = pricePerNight * nights;
-  const GRAND_TOTAL = STAY_TOTAL + SERVICE_FEE;
+  const GRAND_TOTAL = STAY_TOTAL 
 
   useEffect(() => {
     setMounted(true);
@@ -118,8 +118,8 @@ const BookingReviewModal = ({
               <span>${STAY_TOTAL}</span>
             </div>
             <div className="flex justify-between">
-              <span>Service fee</span>
-              <span>${SERVICE_FEE}</span>
+              {/* <span>Service fee</span> */}
+              {/* <span>${SERVICE_FEE}</span> */}
             </div>
             <div className="h-px bg-gray-100 my-2"></div>
             <div className="flex justify-between text-base font-bold text-gray-900">
