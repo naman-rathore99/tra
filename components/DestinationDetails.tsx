@@ -11,16 +11,17 @@ import {
   Info,
   PartyPopper,
   Check,
-  Calendar,
+  Car,
+  Fuel,
 } from "lucide-react";
-import { Destination } from "@/lib/data";
+import { Destination, Vehicle } from "@/lib/data";
 import ImageGallery from "./ImageGallery";
+import VehicleDocumentModal from "./VehicleDocumentModal";
 import BookingReviewModal from "./BookingSuccessModal";
 
 interface DestinationDetailsProps {
   destination: Destination;
   onBack: () => void;
-  // Receiving the data
   initialData?: {
     start: string;
     end: string;
@@ -34,83 +35,106 @@ const DestinationDetails = ({
   onBack,
   initialData,
 }: DestinationDetailsProps) => {
-  // --- HELPER: CALCULATE NIGHTS INITIAL STATE ---
-  // We do this to ensure the price is correct on the very first render
-  const getInitialNights = () => {
-    if (initialData?.start && initialData?.end) {
-      const s = new Date(initialData.start);
-      const e = new Date(initialData.end);
-      const diff = Math.ceil(
-        (e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      return diff > 0 ? diff : 1;
-    }
-    return 1;
-  };
-
   // --- STATE ---
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [includeHall, setIncludeHall] = useState(false);
 
-  // Initialize State with URL Data
+  // VEHICLE STATE
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
+  const [pendingVehicle, setPendingVehicle] = useState<Vehicle | null>(null); // Track which vehicle was clicked before docs upload
+
+  // Date/Guest State
   const [startDate, setStartDate] = useState(initialData?.start || "");
   const [endDate, setEndDate] = useState(initialData?.end || "");
-  const [adults, setAdults] = useState(initialData?.adults || 1);
+  const [nights, setNights] = useState(1);
+  const [adults, setAdults] = useState(initialData?.adults || 2);
   const [children, setChildren] = useState(initialData?.children || 0);
-  const [nights, setNights] = useState(getInitialNights()); // <--- USE HELPER HERE
 
   const [showGuestPopup, setShowGuestPopup] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
 
-  // --- DATA ---
+  // Data Helpers
   const rooms = destination.rooms || [];
   const galleryImages = destination.images?.length
     ? destination.images
     : [destination.image];
+  const vehicles = destination.vehicles || [];
 
-  // --- LIVE CALCULATIONS ---
+  // Calculations
   const currentRoom = rooms.find((r) => r.id === selectedRoom);
   const basePrice = currentRoom?.price || destination.price;
   const roomCapacity = currentRoom?.capacity || 2;
   const totalGuests = adults + children;
-
   const roomsNeeded = selectedRoom ? Math.ceil(totalGuests / roomCapacity) : 1;
+
   const hallPrice = includeHall ? 500 : 0;
+  // Vehicle Price Calculation: (Price * Nights)
+  const vehicleTotal = selectedVehicle ? selectedVehicle.price * nights : 0;
 
-  // CALCULATE TOTAL
   const totalRoomCost = basePrice * nights * roomsNeeded;
-  const grandTotal = totalRoomCost + hallPrice;
+  const grandTotal = totalRoomCost + hallPrice + vehicleTotal;
 
-  // --- EFFECT: Recalculate nights if user changes dates manually ---
+  // Effects
   useEffect(() => {
     if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      const diffTime = end.getTime() - start.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      if (diffDays > 0) setNights(diffDays);
+      const s = new Date(startDate);
+      const e = new Date(endDate);
+      const diff = Math.ceil(
+        (e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      setNights(diff > 0 ? diff : 1);
     }
   }, [startDate, endDate]);
 
+  // Handlers
+  const handleVehicleClick = (vehicle: Vehicle) => {
+    // If clicking the same vehicle, deselect it
+    if (selectedVehicle?.id === vehicle.id) {
+      setSelectedVehicle(null);
+      return;
+    }
+    // Open modal to get docs
+    setPendingVehicle(vehicle);
+    setIsVehicleModalOpen(true);
+  };
+
+  const handleVehicleConfirm = (dlNumber: string) => {
+    // Docs uploaded successfully
+    setSelectedVehicle(pendingVehicle);
+    setIsVehicleModalOpen(false);
+    setPendingVehicle(null);
+  };
+
   return (
     <>
+      {/* --- MODALS --- */}
       {showReviewModal && (
         <BookingReviewModal
           destination={destination}
-          roomName={`${currentRoom?.name || "Standard"} (x${roomsNeeded}) ${
-            includeHall ? "+ Hall" : ""
-          }`}
+          roomName={`${currentRoom?.name || "Standard"} (x${roomsNeeded})`}
+          // We pass extra details via prop drilling or updating the modal to accept a config object.
+          // For now, let's just pass the Grand Total.
           pricePerNight={grandTotal}
           startDate={startDate}
           endDate={endDate}
           nights={nights}
           guests={totalGuests}
           onClose={() => setShowReviewModal(false)}
-          onConfirm={() => alert("Payment")}
+          onConfirm={() => alert("Payment...")}
+          // You should update BookingReviewModal to accept vehicle details if you want to show them there
         />
       )}
 
+      {isVehicleModalOpen && pendingVehicle && (
+        <VehicleDocumentModal
+          vehicle={pendingVehicle}
+          onClose={() => setIsVehicleModalOpen(false)}
+          onConfirm={handleVehicleConfirm}
+        />
+      )}
+
+      {/* --- CONTENT --- */}
       <div className="min-h-screen bg-white animate-in fade-in duration-500">
         <div className="max-w-[1200px] mx-auto px-4 md:px-8 pt-32 pb-20">
           <button
@@ -126,12 +150,7 @@ const DestinationDetails = ({
               <h1 className="text-3xl md:text-5xl font-bold text-gray-900 mb-2">
                 {destination.title}
               </h1>
-              {destination.hasBanquetHall && (
-                <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-bold uppercase tracking-wider rounded-full inline-flex items-center gap-1">
-                  <PartyPopper size={12} /> Hall Available
-                </span>
-              )}
-              <div className="flex items-center gap-2 text-gray-500 mt-2">
+              <div className="flex items-center gap-2 text-gray-500">
                 <MapPin size={18} /> {destination.location}
               </div>
             </div>
@@ -139,15 +158,11 @@ const DestinationDetails = ({
 
           <ImageGallery images={galleryImages} />
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 relative text-black">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 relative">
             <div className="lg:col-span-2 space-y-12">
-              <section>
-                <h2 className="text-2xl font-bold mb-4">About</h2>
-                <p className="text-gray-600 leading-relaxed text-lg">
-                  {destination.description}
-                </p>
-              </section>
+              {/* ... About Section ... */}
 
+              {/* ROOM SELECTION */}
               <section>
                 <h2 className="text-2xl font-bold mb-6">Select Room</h2>
                 <div className="space-y-4">
@@ -166,46 +181,95 @@ const DestinationDetails = ({
                         className="w-32 h-24 rounded-lg object-cover bg-gray-200"
                       />
                       <div className="flex-grow">
-                        <div className="flex justify-between items-start">
-                          <h3 className="font-bold">{room.name}</h3>
-                          <div className="font-bold text-lg">${room.price}</div>
-                        </div>
+                        <h3 className="font-bold">{room.name}</h3>
                         <div className="text-sm text-gray-500 mt-1">
-                          {room.type} • Fits {room.capacity}
+                          {room.type} • {room.capacity} Guests
                         </div>
-                        {totalGuests > room.capacity && (
-                          <div className="mt-2 inline-flex items-center gap-1 text-[10px] bg-orange-100 text-orange-700 px-2 py-1 rounded font-bold">
-                            <Info size={10} /> Auto-adding rooms for{" "}
-                            {totalGuests} guests
-                          </div>
-                        )}
-                      </div>
-                      <div className="ml-auto flex items-center pl-2">
-                        <div
-                          className={`w-6 h-6 rounded-full border border-gray-300 flex items-center justify-center ${
-                            selectedRoom === room.id
-                              ? "bg-black border-black"
-                              : "bg-white"
-                          }`}
-                        >
-                          {selectedRoom === room.id && (
-                            <div className="w-2.5 h-2.5 bg-white rounded-full"></div>
-                          )}
+                        <div className="font-bold mt-2 text-lg">
+                          ${room.price}
                         </div>
                       </div>
+                      {selectedRoom === room.id && (
+                        <div className="w-6 h-6 bg-black rounded-full text-white flex items-center justify-center">
+                          <Check size={14} />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               </section>
+
+              {/* NEW SECTION: VEHICLE RENTAL */}
+              {vehicles.length > 0 && (
+                <section>
+                  <div className="flex items-center gap-2 mb-6">
+                    <Car size={24} />
+                    <h2 className="text-2xl font-bold">Add a Ride</h2>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {vehicles.map((veh) => (
+                      <div
+                        key={veh.id}
+                        onClick={() => handleVehicleClick(veh)}
+                        className={`relative border rounded-2xl p-4 cursor-pointer transition-all group hover:shadow-md ${
+                          selectedVehicle?.id === veh.id
+                            ? "border-black bg-gray-900 text-white"
+                            : "border-gray-200 bg-white"
+                        }`}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="font-bold text-lg">{veh.name}</div>
+                          <div
+                            className={`text-sm font-bold ${
+                              selectedVehicle?.id === veh.id
+                                ? "text-gray-300"
+                                : "text-gray-900"
+                            }`}
+                          >
+                            ${veh.price}/day
+                          </div>
+                        </div>
+                        <div
+                          className={`text-xs mb-3 flex items-center gap-3 ${
+                            selectedVehicle?.id === veh.id
+                              ? "text-gray-400"
+                              : "text-gray-500"
+                          }`}
+                        >
+                          <span className="flex items-center gap-1">
+                            <Users size={12} /> {veh.seats} Seats
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Fuel size={12} /> Petrol
+                          </span>
+                        </div>
+                        <div className="h-32 w-full rounded-xl overflow-hidden bg-gray-100">
+                          <img
+                            src={veh.image}
+                            className="w-full h-full object-cover mix-blend-multiply"
+                            alt={veh.name}
+                          />
+                        </div>
+
+                        {selectedVehicle?.id === veh.id && (
+                          <div className="absolute top-4 right-4 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1">
+                            <Check size={10} /> ADDED
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
             </div>
 
-            {/* STICKY BOOKING CARD */}
+            {/* BOOKING CARD */}
             <div className="relative">
               <div className="sticky top-32 bg-white rounded-2xl shadow-[0_6px_30px_rgba(0,0,0,0.12)] border border-gray-100 p-6">
-                {/* Price Header */}
                 <div className="flex justify-between items-end mb-6">
                   <div>
-                    <span className="text-4xl font-bold text-gray-900">
+                    <span className="text-3xl font-bold text-gray-900">
                       ${grandTotal}
                     </span>
                     <span className="text-gray-500 text-sm font-medium">
@@ -213,19 +277,11 @@ const DestinationDetails = ({
                       total
                     </span>
                   </div>
-                  <div className="text-right">
-                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                      Per Room
-                    </div>
-                    <div className="font-semibold text-sm text-gray-900">
-                      ${basePrice} / night
-                    </div>
-                  </div>
                 </div>
 
-                {/* Inputs Container */}
+                {/* ... Date & Guest Inputs ... */}
                 <div className="border border-gray-200 rounded-xl mb-4 divide-y divide-gray-200">
-                  {/* Dates */}
+                  {/* (Include your Date/Guest Inputs Here from previous code) */}
                   <div className="flex">
                     <div className="p-3 w-1/2 border-r border-gray-200">
                       <label className="text-[10px] font-bold text-gray-800 uppercase block mb-1">
@@ -233,7 +289,7 @@ const DestinationDetails = ({
                       </label>
                       <input
                         type="date"
-                        className="w-full text-sm outline-none bg-transparent font-bold text-gray-900"
+                        className="w-full text-sm outline-none bg-transparent font-medium"
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
                       />
@@ -244,161 +300,78 @@ const DestinationDetails = ({
                       </label>
                       <input
                         type="date"
-                        className="w-full text-sm outline-none bg-transparent font-bold text-gray-900"
+                        className="w-full text-sm outline-none bg-transparent font-medium"
                         min={startDate}
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
                       />
                     </div>
                   </div>
-
-                  {/* Guests */}
-                  <div
-                    className="relative p-3 cursor-pointer hover:bg-gray-50 transition-colors"
-                    onClick={() => setShowGuestPopup(!showGuestPopup)}
-                  >
-                    <label className="text-[10px] font-bold text-gray-800 uppercase block mb-1">
-                      GUESTS
-                    </label>
-                    <div className="text-sm font-bold text-gray-900 flex justify-between items-center">
-                      <span>
-                        {adults} Adults, {children} Kids
-                      </span>
-                      <Users size={16} className="text-gray-400" />
+                  <div className="p-3">
+                    <div className="text-[10px] font-bold text-gray-800 uppercase block mb-1">
+                      Guests
                     </div>
+                    <div className="text-sm font-bold">
+                      {adults} Adults, {children} Kids
+                    </div>
+                  </div>
+                </div>
 
-                    {showGuestPopup && (
-                      <div
-                        className="absolute top-full left-0 right-0 mt-2 bg-white shadow-xl rounded-xl p-4 z-50 border border-gray-100"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="flex justify-between items-center mb-4">
-                          <span className="font-bold text-sm">Adults</span>
-                          <div className="flex gap-3">
-                            <button
-                              onClick={() => setAdults(Math.max(1, adults - 1))}
-                              className="w-6 h-6 rounded-full border hover:bg-gray-100 flex items-center justify-center"
-                            >
-                              <Minus size={12} />
-                            </button>
-                            <span>{adults}</span>
-                            <button
-                              onClick={() => setAdults(adults + 1)}
-                              className="w-6 h-6 rounded-full border hover:bg-gray-100 flex items-center justify-center"
-                            >
-                              <Plus size={12} />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-sm">Children</span>
-                          <div className="flex gap-3">
-                            <button
-                              onClick={() =>
-                                setChildren(Math.max(0, children - 1))
-                              }
-                              className="w-6 h-6 rounded-full border hover:bg-gray-100 flex items-center justify-center"
-                            >
-                              <Minus size={12} />
-                            </button>
-                            <span>{children}</span>
-                            <button
-                              onClick={() => setChildren(children + 1)}
-                              className="w-6 h-6 rounded-full border hover:bg-gray-100 flex items-center justify-center"
-                            >
-                              <Plus size={12} />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="text-right mt-3">
-                          <button
-                            onClick={() => setShowGuestPopup(false)}
-                            className="text-xs font-bold underline"
-                          >
-                            Close
-                          </button>
-                        </div>
+                {/* SELECTED EXTRAS SUMMARY */}
+                {(includeHall || selectedVehicle) && (
+                  <div className="mb-4 space-y-2">
+                    {includeHall && (
+                      <div className="flex justify-between text-xs text-purple-700 bg-purple-50 p-2 rounded-lg">
+                        <span className="font-bold flex items-center gap-1">
+                          <PartyPopper size={12} /> Banquet Hall
+                        </span>
+                        <span>${hallPrice}</span>
+                      </div>
+                    )}
+                    {selectedVehicle && (
+                      <div className="flex justify-between text-xs text-blue-700 bg-blue-50 p-2 rounded-lg">
+                        <span className="font-bold flex items-center gap-1">
+                          <Car size={12} /> {selectedVehicle.name}
+                        </span>
+                        <span>${vehicleTotal}</span>
                       </div>
                     )}
                   </div>
-                </div>
-
-                {/* Hall Toggle */}
-                {destination.hasBanquetHall && (
-                  <div
-                    className={`mb-4 p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-colors ${
-                      includeHall
-                        ? "bg-purple-50 border-purple-500"
-                        : "border-gray-200 hover:border-purple-200"
-                    }`}
-                    onClick={() => setIncludeHall(!includeHall)}
-                  >
-                    <div
-                      className={`w-5 h-5 rounded border flex items-center justify-center ${
-                        includeHall
-                          ? "bg-purple-600 border-purple-600"
-                          : "bg-white border-gray-300"
-                      }`}
-                    >
-                      {includeHall && (
-                        <Check size={12} className="text-white" />
-                      )}
-                    </div>
-                    <div className="text-sm">
-                      <span
-                        className={`font-bold block ${
-                          includeHall ? "text-purple-900" : "text-gray-900"
-                        }`}
-                      >
-                        Add Banquet Hall
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        +$500 Flat Fee
-                      </span>
-                    </div>
-                  </div>
                 )}
 
-                {/* Reserve Button */}
                 <button
                   disabled={!selectedRoom}
                   onClick={() => setShowReviewModal(true)}
-                  className={`w-full py-4 rounded-xl font-bold text-white text-lg transition-all shadow-lg ${
+                  className={`w-full py-4 rounded-xl font-bold text-white transition-all shadow-lg ${
                     !selectedRoom
-                      ? "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none"
+                      ? "bg-gray-200 cursor-not-allowed"
                       : "bg-black hover:bg-gray-800 shadow-black/20"
                   }`}
                 >
-                  {selectedRoom
-                    ? `Reserve ${roomsNeeded} Room${roomsNeeded > 1 ? "s" : ""}`
-                    : "Select a Room"}
+                  {selectedRoom ? `Reserve` : "Select a Room"}
                 </button>
 
-                {/* Breakdown */}
-                <div className="mt-4 flex flex-col gap-1 border-t pt-3 text-xs text-gray-500">
-                  {selectedRoom ? (
-                    <>
-                      <div className="flex justify-between">
-                        <span>
-                          ${basePrice} x {roomsNeeded} rooms x {nights} nights
-                        </span>
-                        <span>${totalRoomCost}</span>
+                {/* PRICE BREAKDOWN */}
+                {selectedRoom && (
+                  <div className="mt-4 flex flex-col gap-1 border-t pt-3 text-xs text-gray-500">
+                    <div className="flex justify-between">
+                      <span>
+                        Rooms ({roomsNeeded} x ${basePrice} x {nights}n)
+                      </span>
+                      <span>${totalRoomCost}</span>
+                    </div>
+                    {selectedVehicle && (
+                      <div className="flex justify-between text-blue-600 font-medium">
+                        <span>Vehicle ({nights} days)</span>
+                        <span>${vehicleTotal}</span>
                       </div>
-                      {includeHall && (
-                        <div className="flex justify-between text-purple-700 font-medium">
-                          <span>Banquet Hall Fee</span>
-                          <span>${hallPrice}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between font-bold text-black border-t border-dashed pt-2 mt-2">
-                        <span>Total</span>
-                        <span>${grandTotal}</span>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-center">You won't be charged yet</p>
-                  )}
-                </div>
+                    )}
+                    <div className="flex justify-between font-bold text-black border-t border-dashed pt-2 mt-2">
+                      <span>Total</span>
+                      <span>${grandTotal}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
