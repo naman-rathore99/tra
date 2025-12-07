@@ -1,5 +1,15 @@
 // lib/data.ts
 
+export interface Room {
+  id: string;
+  name: string;
+  type: "AC" | "Non-AC";
+  price: number;
+  bed: string;
+  capacity: number; // This comes from your Onboarding Dashboard
+  image: string;
+}
+
 export interface Destination {
   id: number;
   title: string;
@@ -8,66 +18,61 @@ export interface Destination {
   description: string;
   image: string;
   price: number;
-  amenities: string[]; // Added this
+  amenities: string[];
+  rooms: Room[];
+  images: string[];
+  // NEW FIELDS FROM ONBOARDING DASHBOARD
+  hasBanquetHall: boolean;
+  hallCapacity?: number;
 }
+
+const generateRooms = (basePrice: number): Room[] => [
+  {
+    id: "r1",
+    name: "Standard Room",
+    type: "Non-AC",
+    price: basePrice,
+    bed: "1 Queen Bed",
+    capacity: 2, // Strict limit from dashboard
+    image:
+      "https://images.unsplash.com/photo-1611892440504-42a792e24d32?q=80&w=800&auto=format&fit=crop",
+  },
+  {
+    id: "r2",
+    name: "Family Suite",
+    type: "AC",
+    price: basePrice + 100,
+    bed: "2 King Beds",
+    capacity: 4, // Higher limit
+    image:
+      "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=800&auto=format&fit=crop",
+  },
+];
 
 export const allDestinations: Destination[] = [
   {
-    id: 1,
-    title: "Thailand",
-    location: "Bangkok",
-    rating: 5.0,
+    title: "Thailand Grand Resort",
+    location: "Bangkok, Thailand",
+    rating: 4.9,
     description:
-      "Explore Thailand's lively cities and stunning tropical beaches.",
+      "A tropical paradise featuring lively cities and stunning beaches.",
     image:
       "https://images.unsplash.com/photo-1552465011-b4e21bf6e79a?q=80&w=2600&auto=format&fit=crop",
     price: 120,
-    amenities: ["Wifi", "Pool", "Air conditioning"],
+    amenities: ["Wifi", "Pool", "Air conditioning", "Spa"],
+    rooms: generateRooms(120),
+    images: [
+      "https://images.unsplash.com/photo-1552465011-b4e21bf6e79a?q=80&w=2600&auto=format&fit=crop",
+    ],
+    // NEW DATA
+    hasBanquetHall: true,
+    hallCapacity: 200,
   },
-  {
-    id: 2,
-    title: "Europe",
-    location: "Paris, France",
-    rating: 4.8,
-    description: "Experience Europe's rich history and diverse cultures.",
-    image:
-      "https://images.unsplash.com/photo-1471623432079-916ef5b5e9f6?q=80&w=2600&auto=format&fit=crop",
-    price: 250,
-    amenities: ["Wifi", "Kitchen", "Heating"],
-  },
-  {
-    id: 3,
-    title: "New York City",
-    location: "Manhattan, NY",
-    rating: 4.9,
-    description:
-      "Dive into the energy of New York City, the city that never sleeps.",
-    image:
-      "https://images.unsplash.com/photo-1496442226666-8d4a0e29f16e?q=80&w=2600&auto=format&fit=crop",
-    price: 300,
-    amenities: ["Wifi", "Gym", "Workplace"],
-  },
-  {
-    id: 4,
-    title: "Dubai",
-    location: "Downtown Dubai",
-    rating: 5.0,
-    description:
-      "Discover Dubai's stunning modern skyline and luxury shopping.",
-    image:
-      "https://images.unsplash.com/photo-1512453979798-5ea936a7fe48?q=80&w=2600&auto=format&fit=crop",
-    price: 450,
-    amenities: ["Wifi", "Pool", "Gym", "Air conditioning"],
-  },
-  {
-    id: 5,
-    title: "Bali",
-    location: "Indonesia",
-    rating: 4.7,
-    description: "Find peace in the temples and rice terraces of Bali.",
-    image:
-      "https://images.unsplash.com/photo-1537996194471-e657df975ab4?q=80&w=2600&auto=format&fit=crop",
-    price: 90,
-    amenities: ["Wifi", "Pool", "Kitchen"],
-  },
-];
+  // ... other items (add hasBanquetHall: false to others to test)
+].map((item, index) => ({ ...item, id: index + 1 }));
+
+export function getDestinationById(
+  id: string | number
+): Destination | undefined {
+  return allDestinations.find((dest) => String(dest.id) === String(id));
+}
